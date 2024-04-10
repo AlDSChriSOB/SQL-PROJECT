@@ -1,0 +1,232 @@
+-- How many employees do we have in the organization?
+Select COUNT(*) AS employee_count
+FROM Employee_test;
+
+-- what is the maximum length of service? 
+Select COUNT(*) AS employee_id, MAX(length_of_service) AS max_length_of_service
+FROM Employee_test;
+--Combine the two
+SELECT 
+  (SELECT COUNT(*) FROM Employee_test) AS employee_count,
+  (SELECT MAX(length_of_service) FROM Employee_test) AS max_length_of_service;
+
+--How many employees are there in each department?
+SELECT department, COUNT(*) AS num_employees
+FROM Employee_test
+GROUP BY department;
+
+-- What is the proportion of male to female employees?
+SELECT gender, COUNT(*) AS gender_count
+FROM Employee_test
+GROUP BY gender;
+SELECT
+  SUM(CASE WHEN gender = 'm' THEN gender_count ELSE 0 END) AS male_count,
+  SUM(CASE WHEN gender = 'f' THEN gender_count ELSE 0 END) AS female_count,
+  CASE 
+    WHEN SUM(CASE WHEN gender = 'f' THEN gender_count ELSE 0 END) = 0 THEN 0 -- Handle division by zero
+    ELSE SUM(CASE WHEN gender = 'm' THEN gender_count ELSE 0 END) / SUM(CASE WHEN gender = 'f' THEN gender_count ELSE 0 END)
+  END AS proportion
+FROM (
+  SELECT gender, COUNT(*) AS gender_count
+  FROM Employee_test
+  GROUP BY gender
+) AS gender_counts;
+
+
+-- Group Employee age into 5 categories (20 – 29, 30 – 39, 40-49, 50-59, >60). What age group has the highest and lowest employee?
+WITH AgeGroups AS (
+  SELECT
+    CASE
+      WHEN age BETWEEN 20 AND 29 THEN '20-29'
+      WHEN age BETWEEN 30 AND 39 THEN '30-39'
+      WHEN age BETWEEN 40 AND 49 THEN '40-49'
+      WHEN age BETWEEN 50 AND 59 THEN '50-59'
+      WHEN age >= 60 THEN '>60'
+    END AS age_group,
+    COUNT(*) AS num_employees
+  FROM Employee_test
+  GROUP BY
+    CASE
+      WHEN age BETWEEN 20 AND 29 THEN '20-29'
+      WHEN age BETWEEN 30 AND 39 THEN '30-39'
+      WHEN age BETWEEN 40 AND 49 THEN '40-49'
+      WHEN age BETWEEN 50 AND 59 THEN '50-59'
+      WHEN age >= 60 THEN '>60'
+    END
+)
+
+SELECT age_group, num_employees
+FROM AgeGroups
+ORDER BY num_employees DESC;
+
+--Who works in Finance department?
+SELECT *
+FROM Employee_test
+WHERE department = 'Finance';
+
+--Who has the highest average training score among all employees?
+SELECT TOP 1 employee_id, avg_training_score
+FROM Employee_test
+GROUP BY employee_id, avg_training_score
+ORDER BY avg_training_score DESC;
+
+
+--Which regions have the highest number of departures (employees who have left), and what are the corresponding departments?
+SELECT et.region, et.department, COUNT(*) AS num_departures
+FROM Employee_test et
+INNER JOIN Employee_performance ep ON et.employee_id = ep.employee_id
+WHERE CAST(ep.Attrition AS bit) = 1
+GROUP BY et.region, et.department
+ORDER BY num_departures DESC;
+
+
+--Which department has the most employees, and which department has the fewest employees?
+SELECT TOP 1 department, COUNT(*) AS num_department
+FROM Employee_test
+GROUP BY department
+ORDER BY num_department DESC;
+
+SELECT TOP 1 department, COUNT(*) AS num_employees
+FROM Employee_test
+GROUP BY department
+ORDER BY num_employees ASC;
+--Combine the two Queries
+WITH MaxEmployees AS (
+  SELECT TOP 1 department, COUNT(*) AS num_department
+  FROM Employee_test
+  GROUP BY department
+  ORDER BY num_department DESC
+),
+MinEmployees AS (
+  SELECT TOP 1 department, COUNT(*) AS num_employees
+  FROM Employee_test
+  GROUP BY department
+  ORDER BY num_employees ASC
+)
+SELECT * FROM MaxEmployees
+UNION ALL
+SELECT * FROM MinEmployees;
+
+--Who are the top 5 highest-earning employees in the 'Technology' department?
+SELECT TOP 5 ep.employee_id, ep.MonthlyIncome
+FROM Employee_performance AS ep
+INNER JOIN Employee_test AS et ON ep.employee_id = et.employee_id
+WHERE et.department = 'Technology'
+ORDER BY ep.MonthlyIncome DESC;
+
+--Who are the employees with awards in departments with more than 10 employees, and what are their department names?
+SELECT e.employee_id, e.awards_won, e.department
+FROM Employee_test AS e
+WHERE e.employee_id IN (
+  SELECT DISTINCT e.employee_id
+  WHERE e.awards_won = 1
+)
+AND e.department IN (
+  SELECT department
+  FROM Employee_test
+  GROUP BY department
+  HAVING COUNT(*) > 10
+);
+
+--What is the average training score of employees in each department
+SELECT department, avg_training_score
+FROM Employee_test;
+
+--What is the average previous year rating by department?
+SELECT department, AVG(previous_year_rating) AS avg_previous_year_rating
+FROM Employee_test
+GROUP BY department;
+
+
+--What is the average training score of employees by education type?
+SELECT education, AVG(avg_training_score) AS avg_training_score
+FROM Employee_test
+GROUP BY education;
+
+--Group Average training score into grades (A,B,C,D,E,F) and what grade had the highest and lowest number of employees
+WITH GradedEmployees AS (
+  SELECT
+    employee_id,
+    CASE
+      WHEN avg_training_score BETWEEN 90 AND 100 THEN 'A'
+      WHEN avg_training_score BETWEEN 80 AND 89 THEN 'B'
+      WHEN avg_training_score BETWEEN 70 AND 79 THEN 'C'
+      WHEN avg_training_score BETWEEN 60 AND 69 THEN 'D'
+      WHEN avg_training_score BETWEEN 50 AND 59 THEN 'E'
+      ELSE 'F'
+    END AS grade
+  FROM Employee_test
+)
+SELECT
+  grade,
+  COUNT(*) AS num_employees
+FROM GradedEmployees
+GROUP BY grade
+ORDER BY num_employees DESC;
+
+
+--Which three departments have the highest average job satisfaction among employees with a Bachelor's degree?
+WITH BachelorSatisfaction AS (
+  SELECT
+    et.department,
+    ep.JobSatisfaction
+  FROM Employee_test AS et
+  JOIN Employee_performance AS ep ON et.employee_id = ep.employee_id
+  WHERE et.education = 'Bachelor''s'
+)
+SELECT TOP 3
+  department,
+  AVG(JobSatisfaction) AS avg_job_satisfaction
+FROM BachelorSatisfaction
+GROUP BY department
+ORDER BY avg_job_satisfaction DESC;
+
+
+--What is the average previous year rating by recruitment channel?
+SELECT recruitment_channel, AVG(previous_year_rating) AS avg_previous_year_rating
+FROM Employee_test
+GROUP BY recruitment_channel;
+
+
+--What is the split of gender by the previous year rating?
+SELECT previous_year_rating, gender, COUNT(*) AS count_by_rating_gender
+FROM Employee_test
+GROUP BY previous_year_rating, gender
+ORDER BY previous_year_rating, gender;
+
+
+--Based on the age group created what is the average previous year rating and average training score.
+--Update the Columns
+UPDATE Employee_test
+SET age_group = 
+  CASE
+    WHEN age BETWEEN 20 AND 29 THEN '20-29'
+    WHEN age BETWEEN 30 AND 39 THEN '30-39'
+    WHEN age BETWEEN 40 AND 49 THEN '40-49'
+    WHEN age BETWEEN 50 AND 59 THEN '50-59'
+    WHEN age >= 60 THEN '>60'
+  END;
+
+  -- Calculate the average previous year rating and average training score for each age group
+SELECT
+  age_group,
+  AVG(previous_year_rating) AS avg_previous_year_rating,
+  AVG(avg_training_score) AS avg_training_score
+FROM Employee_test
+GROUP BY age_group
+ORDER BY age_group;
+
+--What is the average age of male and female employees, and how many employees are there for each gender?
+SELECT
+  gender,
+  AVG(age) AS avg_age,
+  COUNT(*) AS num_employees
+FROM Employee_test
+GROUP BY gender;
+
+
+--Who are the top 5 highest-earning employees with a JobLevel of 3 or higher?
+SELECT TOP 5 employee_id, MonthlyIncome
+FROM Employee_performance
+WHERE JobLevel >= 3
+ORDER BY MonthlyIncome DESC;
